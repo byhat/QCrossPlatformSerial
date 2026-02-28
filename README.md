@@ -186,7 +186,7 @@ Create `res/xml/device_filter.xml`:
 ```
 
 ## Usage Examples
-Comprehensive example https://github.com/byhat/QCrossPlatformSerial-Example
+[App, whitch using this library example](https://github.com/byhat/QCrossPlatformSerial-Example)
 ### Basic Example: Opening a Port and Reading Data
 
 ```cpp
