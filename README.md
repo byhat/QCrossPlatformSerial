@@ -101,7 +101,7 @@ A cross-platform serial port communication library built with Qt, providing a un
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/QCrossPlatformSerial.git
+git clone https://github.com/byhat/QCrossPlatformSerial.git
 cd QCrossPlatformSerial
 
 # Create build directory
