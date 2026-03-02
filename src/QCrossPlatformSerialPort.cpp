@@ -7,6 +7,7 @@
     #include <QGuiApplication>
     #include <QTimer>
     #include <QMutex>
+    #include <QThread>
 #else
     #include <QSerialPort>
 #endif
@@ -19,8 +20,9 @@
  * This class contains all platform-specific implementation details,
  * hidden from users of the public QCrossPlatformSerialPort class.
  */
-class QCrossPlatformSerialPortPrivate
+class QCrossPlatformSerialPortPrivate : public QObject
 {
+    Q_OBJECT
 public:
     QCrossPlatformSerialPort *q;
     QString m_portName;
@@ -41,6 +43,8 @@ public:
     QMutex m_writeMutex;
     QTimer *m_readTimer;
     qint64 m_bytesWrittenPending;
+    QThread *m_workerThread;  // Worker thread for timer operations
+    qint64 m_lastBufferSize;  // Track buffer size to detect new data
 #else
     // Desktop: Wrap QSerialPort
     QSerialPort *m_serialPort;
@@ -58,15 +62,29 @@ public:
         , m_isOpen(false)
 #ifdef Q_OS_ANDROID
         , m_bytesWrittenPending(0)
+        , m_workerThread(nullptr)
+        , m_lastBufferSize(0)
 #else
         , m_serialPort(nullptr)
 #endif
     {
 #ifdef Q_OS_ANDROID
-        m_readTimer = new QTimer(q);
-        QObject::connect(m_readTimer, &QTimer::timeout, [this]() {
-            checkForData();
-        });
+        // Create worker thread for timer operations
+        m_workerThread = new QThread(q);
+        m_readTimer = new QTimer();
+        m_readTimer->moveToThread(m_workerThread);
+        
+        // Start the worker thread
+        m_workerThread->start();
+        
+        // Connect timer timeout to checkForData
+        // Since timer is on worker thread and 'this' is on main thread,
+        // Qt will automatically use Qt::QueuedConnection
+        QObject::connect(m_readTimer, &QTimer::timeout, this, &QCrossPlatformSerialPortPrivate::checkForData);
+        
+        // Clean up worker thread when timer is destroyed
+        QObject::connect(m_readTimer, &QTimer::destroyed, m_workerThread, &QThread::quit);
+        QObject::connect(m_workerThread, &QThread::finished, m_workerThread, &QThread::deleteLater);
 #else
         m_serialPort = new QSerialPort(q);
         // Connect signals from QSerialPort to our public interface
@@ -84,9 +102,28 @@ public:
     ~QCrossPlatformSerialPortPrivate()
     {
 #ifdef Q_OS_ANDROID
+        // Stop the timer first
         if (m_readTimer) {
-            m_readTimer->stop();
+            if (m_readTimer->thread() != QThread::currentThread()) {
+                // Timer is on worker thread, stop it using invokeMethod
+                QMetaObject::invokeMethod(m_readTimer, &QTimer::stop, Qt::BlockingQueuedConnection);
+            } else {
+                m_readTimer->stop();
+            }
             m_readTimer->deleteLater();
+            m_readTimer = nullptr;
+        }
+        // Stop the worker thread
+        if (m_workerThread) {
+            if (m_workerThread->isRunning()) {
+                m_workerThread->quit();
+                if (!m_workerThread->wait(2000)) {
+                    qWarning() << "Worker thread did not finish, forcing termination";
+                    m_workerThread->terminate();
+                    m_workerThread->wait();
+                }
+            }
+            m_workerThread = nullptr;
         }
 #else
         if (m_serialPort) {
@@ -97,14 +134,13 @@ public:
     }
 
 #ifdef Q_OS_ANDROID
+public slots:
     void checkForData()
     {
         if (!m_isOpen) {
             return;
         }
 
-        QMutexLocker locker(&m_readMutex);
-        
         try {
             QJniObject result = QJniObject::callStaticMethod<jstring>(
                 "org/qtserial/UsbSerialManager",
@@ -115,7 +151,12 @@ public:
             if (result.isValid()) {
                 QString data = result.toString();
                 if (!data.isEmpty() && data != "No data available or port is not connected.") {
-                    m_readBuffer.append(data.toUtf8());
+                    // Only hold mutex briefly to append data
+                    {
+                        QMutexLocker locker(&m_readMutex);
+                        m_readBuffer.append(data.toUtf8());
+                    }
+                    // Emit signal without holding mutex
                     qDebug() << "Read" << data.size() << "bytes from serial port";
                     emit q->readyRead();
                 }
@@ -280,7 +321,10 @@ bool QCrossPlatformSerialPort::open(QIODevice::OpenMode mode)
     if (result) {
         d->m_isOpen = true;
         d->m_openMode = mode;
-        d->m_readTimer->start(50); // Check for data every 50ms
+        // Start timer on worker thread using QMetaObject::invokeMethod
+        QMetaObject::invokeMethod(d->m_readTimer, [timer = d->m_readTimer]() {
+            timer->start(50); // Check for data every 50ms
+        }, Qt::QueuedConnection);
         qDebug() << "Serial port opened successfully on Android";
         return true;
     } else {
@@ -320,7 +364,10 @@ void QCrossPlatformSerialPort::close()
     }
 
 #ifdef Q_OS_ANDROID
-    d->m_readTimer->stop();
+    // Stop timer on worker thread using QMetaObject::invokeMethod
+    QMetaObject::invokeMethod(d->m_readTimer, [timer = d->m_readTimer]() {
+        timer->stop();
+    }, Qt::QueuedConnection);
     // Note: We don't close USB connection on Android as it may be shared
     // Just mark as closed
     d->m_isOpen = false;
@@ -553,3 +600,5 @@ void QCrossPlatformSerialPort::clearError()
 {
     d->m_error = QCrossPlatformSerialPortError::NoError;
 }
+
+#include "QCrossPlatformSerialPort.moc"
