@@ -186,7 +186,6 @@ public class UsbSerialManager {
         if (serialPort != null) {
             if (serialPort.isOpen()) {
                 if (!data.isEmpty()) {
-                    data += "\n"; // Добавляем символ новой строки
                     try {
                         serialPort.write(data.getBytes(), 1000); // Отправка данных
                         showToast(context, "Data sent: " + data);

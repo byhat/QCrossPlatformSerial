@@ -22,6 +22,7 @@ import com.hoho.android.usbserial.driver.UsbSerialProber;
 import org.qtproject.qt.android.QtNative;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class UsbSerialManager {
@@ -186,7 +187,6 @@ public class UsbSerialManager {
         if (serialPort != null) {
             if (serialPort.isOpen()) {
                 if (!data.isEmpty()) {
-                    data += "\n"; // Добавляем символ новой строки
                     try {
                         serialPort.write(data.getBytes(), 1000); // Отправка данных
                         showToast(context, "Data sent: " + data);
@@ -247,7 +247,7 @@ public class UsbSerialManager {
                         }
 
                         // Преобразование данных в строку ASCII
-                        String asciiString = new String(buffer, 0, numBytesRead);
+                        String asciiString = new String(buffer, 0, numBytesRead, StandardCharsets.ISO_8859_1);
 
                         // Отображение данных как в шестнадцатеричном формате, так и в ASCII
                         showToast(context, "Data received (hex): " + hexString.toString());
