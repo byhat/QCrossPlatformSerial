@@ -142,23 +142,42 @@ public slots:
         }
 
         try {
-            QJniObject result = QJniObject::callStaticMethod<jstring>(
+            QJniObject result = QJniObject::callStaticMethod<jbyteArray>(
                 "org/qtserial/UsbSerialManager",
                 "readData",
-                "()Ljava/lang/String;"
+                "()[B"
             );
 
             if (result.isValid()) {
-                QString data = result.toString();
-                if (!data.isEmpty() && data != "No data available or port is not connected.") {
-                    // Only hold mutex briefly to append data
-                    {
-                        QMutexLocker locker(&m_readMutex);
-                        m_readBuffer.append(data.toUtf8());
+                jbyteArray byteArray = result.object<jbyteArray>();
+                if (byteArray != nullptr) {
+                    // Get the byte array length
+                    QJniObject envObj = QJniObject::callStaticObjectMethod(
+                        "org/qtproject/qt/android/QtNative",
+                        "activity",
+                        "()Landroid/app/Activity;"
+                    );
+                    if (envObj.isValid()) {
+                        QJniEnvironment jniEnv;
+                        jsize length = jniEnv->GetArrayLength(byteArray);
+                        
+                        if (length > 0) {
+                            // Get the byte array elements
+                            jbyte* bytes = jniEnv->GetByteArrayElements(byteArray, nullptr);
+                            if (bytes != nullptr) {
+                                // Only hold mutex briefly to append data
+                                {
+                                    QMutexLocker locker(&m_readMutex);
+                                    m_readBuffer.append(reinterpret_cast<char*>(bytes), length);
+                                }
+                                // Release the byte array elements
+                                jniEnv->ReleaseByteArrayElements(byteArray, bytes, JNI_ABORT);
+                                // Emit signal without holding mutex
+                                qDebug() << "Read" << length << "bytes from serial port";
+                                emit q->readyRead();
+                            }
+                        }
                     }
-                    // Emit signal without holding mutex
-                    qDebug() << "Read" << data.size() << "bytes from serial port";
-                    emit q->readyRead();
                 }
             } else {
                 qWarning() << "Failed to call readData() from Java - result is invalid";
@@ -394,14 +413,31 @@ qint64 QCrossPlatformSerialPort::write(const QByteArray &data)
 
 #ifdef Q_OS_ANDROID
     QMutexLocker locker(&d->m_writeMutex);
-    QJniObject javaData = QJniObject::fromString(QString::fromUtf8(data));
-    // Use wrapper method that doesn't require Context parameter
+    
+    // Create a jbyteArray from the QByteArray
+    QJniEnvironment env;
+    jbyteArray byteArray = env->NewByteArray(data.size());
+    if (byteArray == nullptr) {
+        d->m_error = QCrossPlatformSerialPortError::WriteError;
+        emit errorOccurred(d->m_error);
+        qWarning() << "Failed to allocate byte array for write";
+        return -1;
+    }
+    
+    // Copy the data to the jbyteArray
+    env->SetByteArrayRegion(byteArray, 0, data.size(),
+                            reinterpret_cast<const jbyte*>(data.constData()));
+    
+    // Call the Java sendData method with byte array
     jboolean result = QJniObject::callStaticMethod<jboolean>(
         "org/qtserial/UsbSerialManager",
         "sendData",
-        "(Ljava/lang/String;)Z",
-        javaData.object<jstring>()
+        "([B)Z",
+        byteArray
     );
+    
+    // Clean up the local reference
+    env->DeleteLocalRef(byteArray);
 
     if (result) {
         d->m_bytesWrittenPending += data.size();

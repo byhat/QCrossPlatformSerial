@@ -34,7 +34,7 @@ public class UsbSerialManager {
     private static UsbSerialReaderThread readerThread;
     private static boolean isReceiverRegistered = false;
     private static int lastReadChannel = -1;  // Добавляем переменную для хранения последнего канала
-    private static String lastReadData = "";  // Buffer for storing last read data
+    private static byte[] lastReadData = null;  // Buffer for storing last read data as byte array
     private static final Object dataLock = new Object();  // Lock for thread-safe data access
 
     private static final String ACTION_USB_PERMISSION = "org.qtcrossplatformserial.USB_PERMISSION";
@@ -183,13 +183,13 @@ public class UsbSerialManager {
     }
 
     // Метод для отправки данных через последовательный порт
-    public static boolean sendData(String data, Context context) {
+    public static boolean sendData(byte[] data, Context context) {
         if (serialPort != null) {
             if (serialPort.isOpen()) {
-                if (!data.isEmpty()) {
+                if (data != null && data.length > 0) {
                     try {
-                        serialPort.write(data.getBytes(), 1000); // Отправка данных
-                        showToast(context, "Data sent: " + data);
+                        serialPort.write(data, 1000); // Отправка данных
+                        showToast(context, "Data sent: " + data.length + " bytes");
                         return true;
                     } catch (IOException e) {
                         showToast(context, "Error sending data: " + e.getMessage());
@@ -246,16 +246,13 @@ public class UsbSerialManager {
                             hexString.append(String.format("%02X ", buffer[i]));
                         }
 
-                        // Преобразование данных в строку ASCII
-                        String asciiString = new String(buffer, 0, numBytesRead, StandardCharsets.ISO_8859_1);
-
-                        // Отображение данных как в шестнадцатеричном формате, так и в ASCII
+                        // Отображение данных в шестнадцатеричном формате
                         showToast(context, "Data received (hex): " + hexString.toString());
-                        showToast(context, "\nData received (ASCII): " + asciiString);
 
-                        // Store the data in the buffer for JNI access
+                        // Store the raw bytes in the buffer for JNI access
                         synchronized (dataLock) {
-                            lastReadData = asciiString;
+                            lastReadData = new byte[numBytesRead];
+                            System.arraycopy(buffer, 0, lastReadData, 0, numBytesRead);
                         }
 
                         // Проверяем, если пришло значение канала
@@ -278,15 +275,15 @@ public class UsbSerialManager {
 
 
     // Метод для чтения данных с устройства (JNI access)
-    public static String readData() {
+    public static byte[] readData() {
         synchronized (dataLock) {
-            if (!lastReadData.isEmpty()) {
-                String data = lastReadData;
-                lastReadData = "";  // Clear after reading
+            if (lastReadData != null && lastReadData.length > 0) {
+                byte[] data = lastReadData;
+                lastReadData = null;  // Clear after reading
                 return data;
             }
         }
-        return "";
+        return null;
     }
 
     // Method to send command to read the current channel
@@ -462,7 +459,7 @@ public class UsbSerialManager {
     }
 
     // JNI method: Send data without Context parameter (wrapper for C++)
-    public static boolean sendData(String data) {
+    public static boolean sendData(byte[] data) {
         // Get context from Qt Native
         try {
             java.lang.reflect.Method activityMethod = org.qtproject.qt.android.QtNative.class.getDeclaredMethod("activity");
