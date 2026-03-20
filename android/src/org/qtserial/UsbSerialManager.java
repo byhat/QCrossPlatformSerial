@@ -166,7 +166,7 @@ public class UsbSerialManager {
         try {
             if (port != null) {
                 serialPort.open(usbManager.openDevice(port.getDriver().getDevice()));
-                serialPort.setParameters(9600, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
+                serialPort.setParameters(115200, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
                 showToast(context, "Serial connection opened successfully.");
 
                 // Запускаем поток для постоянного чтения данных
@@ -210,18 +210,18 @@ public class UsbSerialManager {
 
     // Метод для безопасного отображения Toast сообщения
     public static void showToast(final Context context, final String message) {
-        // Проверка, если мы не на основном потоке, переключаемся на главный поток
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
-        } else {
-            // Переключаемся на главный поток через Handler
-            new Handler(Looper.getMainLooper()).post(new Runnable() {
-                @Override
-                public void run() {
-                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
+        // // Проверка, если мы не на основном потоке, переключаемся на главный поток
+        // if (Looper.myLooper() == Looper.getMainLooper()) {
+        //     Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+        // } else {
+        //     // Переключаемся на главный поток через Handler
+        //     new Handler(Looper.getMainLooper()).post(new Runnable() {
+        //         @Override
+        //         public void run() {
+        //             Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+        //         }
+        //     });
+        // }
     }
 
     // Kласс для постоянного чтения данных с устройства
@@ -234,15 +234,16 @@ public class UsbSerialManager {
 
         @Override
         public void run() {
-            byte[] buffer = new byte[64];
+            int bufferSize = 2048;
+            byte[] buffer = new byte[bufferSize];
             while (!isInterrupted() && serialPort != null && serialPort.isOpen()) {
                 try {
-                    int numBytesRead = serialPort.read(buffer, 1000);
+                    int numBytesRead = serialPort.read(buffer, 0);
                     if (numBytesRead > 0) {
                         // Формирование строки в шестнадцатеричном формате
                         StringBuilder hexString = new StringBuilder();
                         for (int i = 0; i < numBytesRead; i++) {
-                            hexString.append(String.format("%02X ", buffer[i]));
+                            hexString.append((char) buffer[i]);
                         }
 
                         // Отображение данных в шестнадцатеричном формате
@@ -311,8 +312,9 @@ public class UsbSerialManager {
                 serialPort.write(command, 2000);  // Отправляем команду на чтение канала
 
                 // Теперь ждем ответ с данными о канале
-                byte[] response = new byte[64];
-                int numBytesRead = serialPort.read(response, 5000);
+                int responseSize = 2048;
+                byte[] response = new byte[responseSize];
+                int numBytesRead = serialPort.read(response, 0);
 
                 if (numBytesRead >= 4 && response[0] == (byte) 0xC1 && response[1] == 0x05 && response[2] == 0x01) {
                     // Преобразуем четвертый байт в десятичное значение канала
@@ -346,13 +348,14 @@ public class UsbSerialManager {
                 serialPort.write(command, 1000); // Отправляем команду на установку канала
 
                 // Опционально читаем ответ для подтверждения
-                byte[] response = new byte[64];
-                int numBytesRead = serialPort.read(response, 5000);
+                int responseSize = 2048;
+                byte[] response = new byte[responseSize];
+                int numBytesRead = serialPort.read(response, 0);
 
                 if (numBytesRead >= 4) {
                     StringBuilder hexString = new StringBuilder();
                     for (int i = 0; i < numBytesRead; i++) {
-                        hexString.append(String.format("%02X ", response[i]));
+                        hexString.append((char) response[i]);
                     }
                     showToast(context, "Set channel response (hex): " + hexString.toString());
                     return true;
@@ -476,16 +479,16 @@ public class UsbSerialManager {
     // JNI method: Show toast without Context parameter (wrapper for C++)
     public static void showToast(String message) {
         // Get context from Qt Native
-        try {
-            java.lang.reflect.Method activityMethod = org.qtproject.qt.android.QtNative.class.getDeclaredMethod("activity");
-            activityMethod.setAccessible(true);
-            Activity activity = (Activity) activityMethod.invoke(null);
-            if (activity != null) {
-                showToast(activity, message);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        // try {
+        //     java.lang.reflect.Method activityMethod = org.qtproject.qt.android.QtNative.class.getDeclaredMethod("activity");
+        //     activityMethod.setAccessible(true);
+        //     Activity activity = (Activity) activityMethod.invoke(null);
+        //     if (activity != null) {
+        //         showToast(activity, message);
+        //     }
+        // } catch (Exception e) {
+        //     e.printStackTrace();
+        // }
     }
 
     // JNI method: Check if port is connected without Context parameter (wrapper for C++)
