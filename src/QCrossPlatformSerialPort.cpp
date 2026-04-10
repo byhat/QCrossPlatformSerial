@@ -655,24 +655,6 @@ void QCrossPlatformSerialPort::setReadBufferSize(qint32 size)
 #endif
 }
 
-void QCrossPlatformSerialPort::setWriteBufferSize(qint32 size)
-{
-    d->m_writeBufferSize = size;
-
-#ifndef Q_OS_ANDROID
-    d->m_serialPort->setWriteBufferSize(size);
-#else
-    // On Android, call the Java method to set write buffer size
-    QJniObject::callStaticMethod<jboolean>(
-        "org/qtserial/JniUsbSerial",
-        "setWriteBufferSize",
-        "(Ljava/lang/String;I)Z",
-        QJniObject::fromString(d->m_portName).object<jstring>(),
-        size
-    );
-#endif
-}
-
 qint32 QCrossPlatformSerialPort::readBufferSize() const
 {
 #ifndef Q_OS_ANDROID
@@ -681,20 +663,6 @@ qint32 QCrossPlatformSerialPort::readBufferSize() const
     return QJniObject::callStaticMethod<jint>(
         "org/qtserial/JniUsbSerial",
         "getReadBufferSize",
-        "(Ljava/lang/String;)I",
-        QJniObject::fromString(d->m_portName).object<jstring>()
-    );
-#endif
-}
-
-qint32 QCrossPlatformSerialPort::writeBufferSize() const
-{
-#ifndef Q_OS_ANDROID
-    return d->m_serialPort->writeBufferSize();
-#else
-    return QJniObject::callStaticMethod<jint>(
-        "org/qtserial/JniUsbSerial",
-        "getWriteBufferSize",
         "(Ljava/lang/String;)I",
         QJniObject::fromString(d->m_portName).object<jstring>()
     );
