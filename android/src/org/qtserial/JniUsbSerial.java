@@ -29,6 +29,8 @@ public class JniUsbSerial
     private static UsbManager usbManager;
     private static HashMap<String, UsbSerialPort> m_usbSerialPort;
     private static HashMap<String, SerialInputOutputManager> m_usbIoManager;
+    private static HashMap<String, Integer> m_readBufferSize;
+    private static HashMap<String, Integer> m_writeBufferSize;
 
     private static native void nativeDeviceException(int classPoint, String messageA);
     private static native void nativeDeviceNewData(int classPoint, byte[] dataA);
@@ -38,6 +40,8 @@ public class JniUsbSerial
         //m_instance = this;
         m_usbIoManager = new HashMap<String, SerialInputOutputManager>();
         m_usbSerialPort = new HashMap<String, UsbSerialPort>();
+        m_readBufferSize = new HashMap<String, Integer>();
+        m_writeBufferSize = new HashMap<String, Integer>();
     }
 
     private static boolean getCurrentDevices()
@@ -173,6 +177,60 @@ public class JniUsbSerial
         }
     }
 
+    public static boolean setReadBufferSize(String portNameA, int size)
+    {
+        if (m_usbSerialPort.size() <= 0)
+            return false;
+
+        if (m_usbSerialPort.get(portNameA) == null)
+            return false;
+
+        m_readBufferSize.put(portNameA, size);
+        return true;
+    }
+
+    public static boolean setWriteBufferSize(String portNameA, int size)
+    {
+        if (m_usbSerialPort.size() <= 0)
+            return false;
+
+        if (m_usbSerialPort.get(portNameA) == null)
+            return false;
+
+        m_writeBufferSize.put(portNameA, size);
+        return true;
+    }
+
+    public static int getReadBufferSize(String portNameA)
+    {
+        if (m_usbSerialPort.size() <= 0)
+            return 2048;
+
+        if (m_usbSerialPort.get(portNameA) == null)
+            return 2048;
+
+        Integer size = m_readBufferSize.get(portNameA);
+        if (size == null)
+            return 2048;
+
+        return size;
+    }
+
+    public static int getWriteBufferSize(String portNameA)
+    {
+        if (m_usbSerialPort.size() <= 0)
+            return 2048;
+
+        if (m_usbSerialPort.get(portNameA) == null)
+            return 2048;
+
+        Integer size = m_writeBufferSize.get(portNameA);
+        if (size == null)
+            return 2048;
+
+        return size;
+    }
+
     public static void stopIoManager(String portNameA)
     {
         if (m_usbIoManager.get(portNameA) == null)
@@ -203,6 +261,8 @@ public class JniUsbSerial
             stopIoManager(portNameA);
             m_usbSerialPort.get(portNameA).close();
             m_usbSerialPort.remove(portNameA);
+            m_readBufferSize.remove(portNameA);
+            m_writeBufferSize.remove(portNameA);
 
             return true;
         }
@@ -258,6 +318,8 @@ public class JniUsbSerial
             }
             catch (Exception e) {
                 m_usbSerialPort.remove(portNameA);
+                m_readBufferSize.remove(portNameA);
+                m_writeBufferSize.remove(portNameA);
                 stopIoManager(portNameA);
                 return 0;
             }

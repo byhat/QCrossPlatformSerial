@@ -35,6 +35,7 @@ public class UsbSerialManager {
     private static int lastReadChannel = -1;  // Добавляем переменную для хранения последнего канала
     private static byte[] lastReadData = null;  // Buffer for storing last read data as byte array
     private static final Object dataLock = new Object();  // Lock for thread-safe data access
+    private static int readBufferSize = 2048;  // Read buffer size, default 2048 bytes
 
     private static final String ACTION_USB_PERMISSION = "org.qtserial.USB_PERMISSION";
     private static final int PERMISSION_REQUEST_CODE = 1;
@@ -234,7 +235,7 @@ public class UsbSerialManager {
 
         @Override
         public void run() {
-            int bufferSize = 2048;
+            int bufferSize = readBufferSize;
             byte[] buffer = new byte[bufferSize];
             while (!isInterrupted() && serialPort != null && serialPort.isOpen()) {
                 try {
@@ -499,5 +500,17 @@ public class UsbSerialManager {
     // JNI method: Get the last read channel value
     public static int getLastReadChannel() {
         return lastReadChannel;
+    }
+
+    // Method to set the read buffer size
+    public static void setReadBufferSize(int size) {
+        if (size > 0) {
+            readBufferSize = size;
+        }
+    }
+
+    // Method to get the current read buffer size
+    public static int getReadBufferSize() {
+        return readBufferSize;
     }
 }

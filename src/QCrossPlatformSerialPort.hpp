@@ -261,6 +261,30 @@ public:
     qint64 bytesToWrite() const;
 
     /**
+     * @brief Sets the read buffer size.
+     * @param size The read buffer size in bytes
+     */
+    void setReadBufferSize(qint32 size);
+
+    /**
+     * @brief Sets the write buffer size.
+     * @param size The write buffer size in bytes
+     */
+    void setWriteBufferSize(qint32 size);
+
+    /**
+     * @brief Returns the current read buffer size.
+     * @return The read buffer size in bytes
+     */
+    qint32 readBufferSize() const;
+
+    /**
+     * @brief Returns the current write buffer size.
+     * @return The write buffer size in bytes
+     */
+    qint32 writeBufferSize() const;
+
+    /**
      * @brief Returns the last error that occurred.
      * @return The last error
      */
