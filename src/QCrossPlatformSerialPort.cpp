@@ -482,9 +482,15 @@ bool QCrossPlatformSerialPort::setBaudRate(qint32 baudRate, QCrossPlatformDirect
 #ifndef Q_OS_ANDROID
     return d->m_serialPort->setBaudRate(baudRate, QCrossPlatformSerialPortPrivate::convertDirections(directions));
 #else
-    // On Android, baud rate is typically handled by USB-to-serial adapter
-    // We store it for reference but actual configuration may be limited
-    return true;
+    // On Android, call the Java method to set baud rate on the USB serial port
+    bool result = QJniObject::callStaticMethod<jboolean>(
+        "org/qtserial/JniUsbSerial",
+        "setBaudRate",
+        "(Ljava/lang/String;I)Z",
+        QJniObject::fromString(d->m_portName).object<jstring>(),
+        baudRate
+    );
+    return result;
 #endif
 }
 

@@ -154,6 +154,25 @@ public class JniUsbSerial
         }
     }
 
+    public static boolean setBaudRate(String portNameA, int baudRate)
+    {
+        if (m_usbSerialPort.size() <= 0)
+            return false;
+
+        if (m_usbSerialPort.get(portNameA) == null)
+            return false;
+
+        try
+        {
+            m_usbSerialPort.get(portNameA).setParameters(baudRate, 8, 1, 0);
+            return true;
+        }
+        catch(IOException eA)
+        {
+            return false;
+        }
+    }
+
     public static void stopIoManager(String portNameA)
     {
         if (m_usbIoManager.get(portNameA) == null)
